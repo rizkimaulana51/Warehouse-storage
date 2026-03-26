@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #21262d;
+            --border: #30363d;
+            --text: #e6edf3;
+            --muted: #7d8590;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --yellow: #d29922;
+            --red: #f85149;
+            --purple: #bc8cff;
+            --cell-empty: #1c2128;
+            --cell-low: #0d4a1a;
+            --cell-mid: #4a3000;
+            --cell-high: #4a0d0d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .header-icon {
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, #1f6feb, #388bfd);
+            border-radius: 12px;
+            display: grid; place-items: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .header p {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* ── UPLOAD ── */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 36px;
+            text-align: center;
+            transition: border-color 0.2s, background 0.2s;
+            cursor: pointer;
+            background: var(--surface);
+            margin-bottom: 28px;
+            position: relative;
+        }
+        .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: rgba(88, 166, 255, 0.06);
+        }
+        .upload-zone input[type=file] {
+            position: absolute; inset: 0;
+            opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .upload-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .upload-zone h3 { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+        .upload-zone p { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+        .upload-zone .btn {
+            display: inline-block;
+            margin-top: 16px;
+            background: var(--accent);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.9rem;
+            padding: 10px 24px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        /* ── ERROR ── */
+        .error-box {
+            background: rgba(248, 81, 73, 0.12);
+            border: 1px solid var(--red);
+            border-radius: 12px;
+            padding: 14px 18px;
+            color: var(--red);
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        /* ── STATS GRID ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 500px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 14px;
+            text-align: center;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .stat-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        /* ── LEGEND ── */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 28px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
+        .legend-dot {
+            width: 14px; height: 14px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        /* ── FLOOR TITLE ── */
+        .floor-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin: 32px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .floor-title .badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 3px 12px;
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        /* ── GRID TABLE ── */
+        .grid-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow-x: auto;
+            padding: 18px;
+        }
+        table { border-collapse: collapse; min-width: max-content; }
+
+        td {
+            border: 1px solid var(--border);
+            text-align: center;
+            padding: 8px 6px;
+            min-width: 82px;
+            height: 86px;
+            transition: transform 0.15s, box-shadow 0.15s;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        td:hover:not(.row-label) {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 2px var(--accent);
+            z-index: 5;
+            position: relative;
+            border-radius: 6px;
+        }
+        .row-label {
+            background: var(--surface2);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 1.1rem;
+            min-width: 48px;
+            cursor: default;
+            border: 1px solid var(--border);
+        }
+        .row-label:hover { transform: none; box-shadow: none; }
+
+        /* Cell Content */
+        .cell-code { font-size: 11px; color: #8b949e; font-weight: 600; margin-bottom: 3px; }
+        .cell-roll {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1;
+        }
+        .cell-motif {
+            font-size: 10px;
+            color: #8b949e;
+            margin-top: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 20px;
+            display: inline-block;
+            padding: 2px 7px;
+        }
+        .cell-up-badge {
+            font-size: 9px;
+            background: #3d2b00;
+            color: #f0c040;
+            border-radius: 4px;
+            padding: 2px 6px;
+            display: inline-block;
+            margin-bottom: 3px;
+            font-weight: 700;
+        }
+
+        /* Cell backgrounds */
+        .cell-empty  { background: var(--cell-empty); }
+        .cell-low    { background: var(--cell-low); }
+        .cell-mid    { background: var(--cell-mid); }
+        .cell-high   { background: var(--cell-high); }
+        .cell-underpass-empty { background: #1f1a00; }
+
+        /* ── MODAL ── */
+        .modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.2s;
+        }
+        .modal-overlay.open { display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 520px;
+            overflow: hidden;
+            animation: slideUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-head {
+            background: linear-gradient(135deg, #1f6feb, #388bfd);
+            padding: 20px 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-head h2 { font-size: 1.2rem; color: white; }
+        .modal-close {
+            width: 32px; height: 32px;
+            background: rgba(255,255,255,0.15);
+            border: none; border-radius: 8px;
+            color: white; font-size: 18px; font-weight: 700;
+            cursor: pointer; display: grid; place-items: center;
+            transition: background 0.2s;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-body {
+            padding: 20px 22px;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+        .roll-badge {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .roll-badge .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+        .roll-badge .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.4rem;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+        .motif-list { list-style: none; }
+        .motif-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 8px 0;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .motif-item:hover { border-left-color: var(--purple); transform: translateX(4px); }
+        .motif-row { display: flex; justify-content: space-between; align-items: center; }
+        .motif-name { font-weight: 600; font-size: 0.9rem; }
+        .motif-pill {
+            background: rgba(88,166,255,0.15);
+            color: var(--accent);
+            font-size: 0.78rem;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+        .lot-details {
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+        .lot-summary {
+            font-size: 0.77rem;
+            color: var(--muted);
+            cursor: pointer;
+            user-select: none;
+        }
+        .lot-summary:hover { color: var(--accent); }
+        .lot-items {
+            margin-top: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        .lot-item {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--muted);
+            padding: 2px 0;
+        }
+        .no-data { text-align: center; color: var(--muted); padding: 30px; font-size: 0.9rem; }
+
+        /* ── FOOTER ── */
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        /* ── ANIMATIONS ── */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+
+        /* ── HIDDEN ── */
+        .hidden { display: none !important; }
+
+        /* ── Loading ── */
+        .loading-bar {
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+            border-radius: 3px;
+            animation: pulse 1.2s infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width:1500px;margin:0 auto;">
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-icon">📦</div>
+        <div>
+            <h1>WAREHOUSE DASHBOARD</h1>
+            <p>Rak A–H · Lantai 1 &amp; 2 · Underpass B–G</p>
+        </div>
+    </div>
+
+    <!-- ERROR -->
+    <div id="errorBox" class="error-box hidden"></div>
+    <div id="loadingBar" class="loading-bar hidden"></div>
+
+    <!-- UPLOAD -->
+    <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+        <div class="icon">📤</div>
+        <h3>Upload Database Excel</h3>
+        <p>Drag &amp; drop file .xlsx atau klik untuk memilih</p>
+        <p style="margin-top:6px;font-size:0.78rem;color:#484f58;">Format lokasi: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;">PRGS A 1.1</code> &nbsp;|&nbsp; <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;">PRGS B UNDERPASS 1.1</code></p>
+        <div class="btn">Pilih File</div>
+    </div>
+
+    <!-- CONTENT (hidden until file processed) -->
+    <div id="dashContent" class="hidden">
+
+        <!-- STATS -->
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <!-- LEGEND -->
+        <div class="legend">
+            <span style="font-size:0.8rem;font-weight:600;color:var(--text);margin-right:6px;">Warna:</span>
+            <div class="legend-item"><div class="legend-dot" style="background:#3fb950;"></div>L1: 1–20 &nbsp;|&nbsp; L2: 1–10</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#d29922;"></div>L1: 21–40 &nbsp;|&nbsp; L2: 11–20</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f85149;"></div>L1: ≥41 &nbsp;|&nbsp; L2: ≥21</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#1c2128;border:1px solid #30363d;"></div>Kosong</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3d2b00;border:1px solid #f0c040;"></div>Underpass (UP)</div>
+        </div>
+
+        <!-- LANTAI 1 -->
+        <div class="floor-title" id="floor1Title">
+            🏭 LANTAI 1 <span class="badge" id="floor1Badge">0 roll</span>
+        </div>
+        <div class="grid-container">
+            <table id="tableFloor1"></table>
+        </div>
+
+        <!-- LANTAI 2 -->
+        <div class="floor-title" id="floor2Title">
+            🏗️ LANTAI 2 <span class="badge" id="floor2Badge">0 roll</span>
+        </div>
+        <div class="grid-container">
+            <table id="tableFloor2"></table>
+        </div>
+
+        <div class="footer">Warehouse Dashboard – Rak A–H + Underpass © 2026 &nbsp;·&nbsp; Klik rak untuk melihat detail motif</div>
+    </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-head">
+            <h2 id="modalTitle">Detail Rak</h2>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="roll-badge">
+                <div class="label">Total Roll</div>
+                <div class="value" id="modalTotal">0</div>
+            </div>
+            <ul class="motif-list" id="modalMotifs"></ul>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let warehouseData = { floor1: {}, floor2: {} };
+
+// ═══════════════════════════════════════
+//  PARSE LOCATION  (mirrors Python logic)
+// ═══════════════════════════════════════
+function parseLocation(loc) {
+    if (!loc || loc === '' || loc === null || loc === undefined) return null;
+    const s = String(loc).trim();
+    const u = s.toUpperCase();
+
+    // REGULAR A-H
+    const regularRacks = ['A','B','C','D','E','F','G','H'];
+    for (const r of regularRacks) {
+        if (u.includes(`PRGS ${r} `) && !u.includes('UNDERPASS')) {
+            const m = u.match(/PRGS\s+([A-H])\s+(\d+)\.(\d+)/);
+            if (m) {
+                const rack = m[1], number = parseInt(m[2]), floor = parseInt(m[3]);
+                if (rack === 'H' && number <= 2) return null;
+                return { type:'regular', rack, number, floor,
+                    key:`${rack}_${number}_${floor}`,
+                    display:`${rack} ${number}.${floor}` };
+            }
+        }
+    }
+
+    // UNDERPASS B-G, floor 1 only
+    const upRacks = ['B','C','D','E','F','G'];
+    for (const r of upRacks) {
+        if (u.includes(`PRGS ${r} UNDERPASS`)) {
+            const m = u.match(/PRGS\s+([B-G])\s+UNDERPASS\s+(\d+)\.(\d+)/);
+            if (m) {
+                const rack = m[1], upNum = parseInt(m[2]), floor = parseInt(m[3]);
+                if (floor !== 1) return null;
+                return { type:'underpass', rack, underpass_number: upNum, floor,
+                    key:`${rack}_UP${upNum}`,
+                    display:`${rack} UP${upNum}` };
+            }
+        }
+    }
+    return null;
+}
+
+// ═══════════════════════════════════════
+//  PROCESS EXCEL DATA
+// ═══════════════════════════════════════
+function processData(rows) {
+    const data = { floor1:{}, floor2:{} };
+    const stats = { total_rows: rows.length, processed:0, skipped:0, floor1:0, floor2:0 };
+
+    for (const row of rows) {
+        const locVal = row['Location'];
+        if (!locVal) { stats.skipped++; continue; }
+
+        const parsed = parseLocation(locVal);
+        if (!parsed) { stats.skipped++; continue; }
+
+        const layer = (parsed.type === 'underpass' || parsed.floor === 1) ? 'floor1' : 'floor2';
+        stats[layer]++;
+
+        const product = String(row['Product/Name'] ?? '');
+        const lot     = String(row['Lot/Serial Number'] ?? '');
+        const key     = parsed.key;
+
+        if (!data[layer][key]) {
+            data[layer][key] = {
+                total_rolls: 0, motifs: {}, lots: {},
+                display: parsed.display, type: parsed.type
+            };
+        }
+        data[layer][key].total_rolls++;
+        data[layer][key].motifs[product] = (data[layer][key].motifs[product] || 0) + 1;
+        if (!data[layer][key].lots[product]) data[layer][key].lots[product] = [];
+        data[layer][key].lots[product].push(lot);
+    }
+
+    // motif_count
+    for (const layer of ['floor1','floor2']) {
+        for (const k of Object.keys(data[layer])) {
+            data[layer][k].motif_count = Object.keys(data[layer][k].motifs).length;
+        }
+    }
+
+    stats.processed = stats.floor1 + stats.floor2;
+    return { data, stats };
+}
+
+// ═══════════════════════════════════════
+//  COMPUTE SUMMARY
+// ═══════════════════════════════════════
+function computeSummary(data) {
+    let totalRollNormal = 0;
+    let terisiL1 = 0, kosongL1 = 0, terisiL2 = 0, kosongL2 = 0;
+
+    // LANTAI 1
+    // A: 1-24
+    for (let n = 1; n <= 24; n++) {
+        const k = `A_${n}_1`;
+        if (data.floor1[k] && data.floor1[k].type === 'regular') {
+            totalRollNormal += data.floor1[k].total_rolls; terisiL1++;
+        } else kosongL1++;
+    }
+    // B-G: 1-22
+    for (const r of ['B','C','D','E','F','G']) {
+        for (let n = 1; n <= 22; n++) {
+            const k = `${r}_${n}_1`;
+            if (data.floor1[k] && data.floor1[k].type === 'regular') {
+                totalRollNormal += data.floor1[k].total_rolls; terisiL1++;
+            } else kosongL1++;
+        }
+    }
+    // H: 3-26
+    for (let n = 3; n <= 26; n++) {
+        const k = `H_${n}_1`;
+        if (data.floor1[k] && data.floor1[k].type === 'regular') {
+            totalRollNormal += data.floor1[k].total_rolls; terisiL1++;
+        } else kosongL1++;
+    }
+
+    // LANTAI 2
+    // A-G: 1-24
+    for (const r of ['A','B','C','D','E','F','G']) {
+        for (let n = 1; n <= 24; n++) {
+            const k = `${r}_${n}_2`;
+            if (data.floor2[k]) {
+                totalRollNormal += data.floor2[k].total_rolls; terisiL2++;
+            } else kosongL2++;
+        }
+    }
+    // H: 3-26
+    for (let n = 3; n <= 26; n++) {
+        const k = `H_${n}_2`;
+        if (data.floor2[k]) {
+            totalRollNormal += data.floor2[k].total_rolls; terisiL2++;
+        } else kosongL2++;
+    }
+
+    const kapL1 = (24*50) + (6*22*50) + (24*50);
+    const kapL2 = (7*24*30) + (24*30);
+    const sisaKap = (kapL1 + kapL2) - totalRollNormal;
+
+    return { total_roll: totalRollNormal, lokasi_terisi_l1: terisiL1, lokasi_kosong_l1: kosongL1,
+             lokasi_terisi_l2: terisiL2, lokasi_kosong_l2: kosongL2, sisa_kapasitas: sisaKap };
+}
+
+// ═══════════════════════════════════════
+//  CELL COLOR HELPERS
+// ═══════════════════════════════════════
+function cellClass(roll, floor, isUnderpass) {
+    if (isUnderpass) return roll > 0 ? (roll >= 41 ? 'cell-high' : roll >= 21 ? 'cell-mid' : 'cell-low') : 'cell-underpass-empty';
+    if (roll === 0) return 'cell-empty';
+    if (floor === 1) return roll >= 41 ? 'cell-high' : roll >= 21 ? 'cell-mid' : 'cell-low';
+    return roll >= 21 ? 'cell-high' : roll >= 11 ? 'cell-mid' : 'cell-low';
+}
+
+// ═══════════════════════════════════════
+//  BUILD TABLE
+// ═══════════════════════════════════════
+function buildTable(tableEl, floorKey, floorNum, data) {
+    tableEl.innerHTML = '';
+    const racks = ['A','B','C','D','E','F','G','H'];
+
+    for (const rack of racks) {
+        const tr = document.createElement('tr');
+        // Row label
+        const labelTd = document.createElement('td');
+        labelTd.className = 'row-label';
+        labelTd.textContent = rack;
+        tr.appendChild(labelTd);
+
+        const start = rack === 'H' ? 3 : 1;
+        const end   = rack === 'H' ? 26 : 24;
+
+        for (let n = start; n <= end; n++) {
+            let key, displayText, isUnderpass = false;
+
+            if (floorNum === 1 && ['B','C','D','E','F','G'].includes(rack)) {
+                if (n === 23) { key = `${rack}_UP1`; displayText = `${rack} UP1`; isUnderpass = true; }
+                else if (n === 24) { key = `${rack}_UP2`; displayText = `${rack} UP2`; isUnderpass = true; }
+                else { key = `${rack}_${n}_1`; displayText = `${rack} ${n}.1`; }
+            } else {
+                key = `${rack}_${n}_${floorNum}`;
+                displayText = `${rack} ${n}.${floorNum}`;
+            }
+
+            const item    = data[floorKey][key];
+            const roll    = item ? item.total_rolls : 0;
+            const motif   = item ? item.motif_count : 0;
+            const cls     = cellClass(roll, floorNum, isUnderpass);
+
+            const td = document.createElement('td');
+            td.className = cls;
+            td.innerHTML = `
+                <div class="cell-code">${displayText}</div>
+                ${isUnderpass ? '<div class="cell-up-badge">UP</div>' : ''}
+                <div class="cell-roll">${roll}</div>
+                ${roll > 0 ? `<div class="cell-motif">${motif} motif</div>` : ''}
+            `;
+            td.addEventListener('click', () => showDetail(key, floorKey, displayText, data));
+            tr.appendChild(td);
+        }
+        tableEl.appendChild(tr);
+    }
+}
+
+// ═══════════════════════════════════════
+//  RENDER DASHBOARD
+// ═══════════════════════════════════════
+function renderDashboard(data, stats) {
+    const summary = computeSummary(data);
+    warehouseData = data;
+
+    // Stats cards
+    const cards = [
+        { label:'TOTAL ROLL',     value: summary.total_roll },
+        { label:'KOSONG L1',      value: summary.lokasi_kosong_l1 },
+        { label:'KOSONG L2',      value: summary.lokasi_kosong_l2 },
+        { label:'TERISI L1',      value: summary.lokasi_terisi_l1 },
+        { label:'TERISI L2',      value: summary.lokasi_terisi_l2 },
+        { label:'SISA KAPASITAS', value: summary.sisa_kapasitas },
+    ];
+    const sg = document.getElementById('statsGrid');
+    sg.innerHTML = cards.map(c => `
+        <div class="stat-card">
+            <div class="stat-value">${c.value.toLocaleString()}</div>
+            <div class="stat-label">${c.label}</div>
+        </div>
+    `).join('');
+
+    // Floor badges
+    document.getElementById('floor1Badge').textContent = `${stats.floor1} roll`;
+    document.getElementById('floor2Badge').textContent = `${stats.floor2} roll`;
+
+    // Tables
+    buildTable(document.getElementById('tableFloor1'), 'floor1', 1, data);
+    buildTable(document.getElementById('tableFloor2'), 'floor2', 2, data);
+
+    document.getElementById('dashContent').classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════
+function showDetail(key, floorKey, displayText, data) {
+    const item = data[floorKey][key];
+    document.getElementById('modalTitle').textContent = `📌 ${displayText}`;
+
+    if (!item || item.total_rolls === 0) {
+        document.getElementById('modalTotal').textContent = '0';
+        document.getElementById('modalMotifs').innerHTML = '<div class="no-data">📭 Rak ini kosong</div>';
+    } else {
+        document.getElementById('modalTotal').textContent = item.total_rolls;
+        const motifs = item.motifs, lots = item.lots || {};
+        let html = '';
+        for (const [name, count] of Object.entries(motifs)) {
+            const lotArr = lots[name] || [];
+            html += `
+            <li class="motif-item">
+                <div class="motif-row">
+                    <span class="motif-name">${name || '(nama tidak tersedia)'}</span>
+                    <span class="motif-pill">${count} roll</span>
+                </div>
+                ${lotArr.length > 0 ? `
+                <div class="lot-details">
+                    <details>
+                        <summary class="lot-summary">📋 Lihat Lot/Serial (${lotArr.length} item)</summary>
+                        <div class="lot-items">${lotArr.map(l => `<div class="lot-item">• ${l}</div>`).join('')}</div>
+                    </details>
+                </div>` : ''}
+            </li>`;
+        }
+        document.getElementById('modalMotifs').innerHTML = html;
+    }
+    document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+}
+document.getElementById('modalOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// ═══════════════════════════════════════
+//  FILE INPUT HANDLER
+// ═══════════════════════════════════════
+function handleFile(file) {
+    if (!file) return;
+    const err = document.getElementById('errorBox');
+    err.classList.add('hidden');
+    document.getElementById('loadingBar').classList.remove('hidden');
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const wb = XLSX.read(e.target.result, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws);
+
+            if (rows.length === 0) throw new Error('File kosong atau tidak ada data');
+            if (!Object.keys(rows[0]).includes('Location')) {
+                throw new Error("Kolom 'Location' tidak ditemukan dalam file");
+            }
+
+            const { data, stats } = processData(rows);
+            renderDashboard(data, stats);
+        } catch(ex) {
+            err.textContent = '⚠️ ' + ex.message;
+            err.classList.remove('hidden');
+        } finally {
+            document.getElementById('loadingBar').classList.add('hidden');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+document.getElementById('fileInput').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// Drag & Drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    handleFile(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
